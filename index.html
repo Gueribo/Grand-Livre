@@ -118,6 +118,36 @@
     background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent);
     border-radius:12px; padding:11px 16px; margin-bottom:14px; font-size:13.5px; font-weight:500;
   }
+
+  /* ---------- Lock screen & security panel ---------- */
+  .lock-screen{
+    /* Below .modal-backdrop (50) and .toast (60): the "code oublié" confirm
+       dialog opens while this is showing and must stay clickable above it. */
+    position:fixed; inset:0; z-index:45; display:flex; align-items:center; justify-content:center;
+    background:var(--paper); padding:20px;
+  }
+  .lock-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);
+    padding:32px 28px; max-width:340px; width:100%; text-align:center;
+  }
+  .lock-glyph{ font-size:34px; margin-bottom:10px; }
+  .lock-card h1{ font-size:20px; margin:0 0 6px; }
+  .lock-card p{ color:var(--ink-3); font-size:13px; margin:0 0 18px; }
+  .lock-card form{ display:flex; flex-direction:column; gap:10px; }
+  .lock-card .btn{ width:100%; }
+  #pin-unlock-input{
+    font-family:"IBM Plex Mono",monospace; font-size:22px; text-align:center; letter-spacing:.35em;
+    padding:12px; border-radius:10px; border:1px solid var(--line-strong); background:var(--surface-2); color:var(--ink);
+  }
+  #pin-unlock-input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .lock-error{ color:var(--debit); font-size:12.5px; }
+  .lock-reset-link{
+    margin-top:16px; background:none; border:none; color:var(--ink-3); font-size:11.5px;
+    text-decoration:underline; cursor:pointer; padding:0;
+  }
+  .lock-reset-link:hover{ color:var(--ink-2); }
+  .security-status{ font-size:13.5px; color:var(--accent); font-weight:600; margin-bottom:2px; }
+  .security-hint{ color:var(--ink-3); font-size:12.5px; margin:0 0 14px; line-height:1.5; }
   .balance-block{ text-align:right; }
   .balance-block .label{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-bottom:2px; }
   .balance-figure{ font-size:38px; font-weight:600; line-height:1; }
@@ -380,12 +410,13 @@
     {id:"acc_default", name:"Compte courant", kind:"courant"}
   ];
 
-  function blankState(){ return { accounts: DEFAULT_ACCOUNTS.slice(), categories: DEFAULT_CATEGORIES.slice(), transactions: [], recurring: [] }; }
+  function blankState(){ return { accounts: DEFAULT_ACCOUNTS.slice(), categories: DEFAULT_CATEGORIES.slice(), transactions: [], recurring: [], security: {pinHash:null, autoLockMinutes:5} }; }
 
   // Brings any saved/imported state up to the current shape: ensures at least
   // one account exists, back-fills accountId on transactions saved before
-  // multi-account support existed, and ensures a recurring-rules array exists
-  // for saves made before that feature existed.
+  // multi-account support existed, ensures a recurring-rules array exists for
+  // saves made before that feature existed, and likewise for the security
+  // (PIN lock) settings.
   function normalizeState(parsed){
     if(!parsed || !Array.isArray(parsed.categories) || !Array.isArray(parsed.transactions)) return blankState();
     if(!Array.isArray(parsed.accounts) || !parsed.accounts.length){
@@ -396,6 +427,7 @@
       if(!t.accountId) t.accountId = defaultId;
     });
     if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
+    if(!parsed.security || typeof parsed.security!=="object"){ parsed.security = {pinHash:null, autoLockMinutes:5}; }
     return parsed;
   }
 
@@ -433,10 +465,25 @@
     recurringType: "expense"
   };
 
+  // Session-only lock state (never persisted): the app starts locked
+  // whenever a PIN is set, so every fresh open/reopen requires it again.
+  var locked = !!(state.security && state.security.pinHash);
+  var lockError = false;
+  var lastActivityAt = Date.now();
+
   /* ===================== Helpers ===================== */
   var MONTHS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   var fmtEUR = new Intl.NumberFormat("fr-FR", { style:"currency", currency:"EUR" });
   var fmtDateShort = new Intl.DateTimeFormat("fr-FR", { day:"2-digit", month:"short" });
+
+  // Deterministic, synchronous, non-cryptographic hash — this lock is a
+  // privacy screen against a casual glance, not real encryption (see the
+  // "Sécurité" panel copy), so a heavyweight hash would be false comfort.
+  function simpleHash(str){
+    var h = 5381;
+    for(var i=0;i<str.length;i++){ h = ((h*33) ^ str.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+  }
 
   function money(n){ return fmtEUR.format(n); }
   function signedMoney(n, type){ return (type==="expense" ? "− " : "+ ") + fmtEUR.format(Math.abs(n)); }
@@ -575,6 +622,13 @@
 
   /* ===================== Rendering ===================== */
   function render(){
+    if(locked && state.security && state.security.pinHash){
+      document.getElementById("app").innerHTML = renderLockScreen();
+      bindEvents();
+      var pinInput = document.getElementById("pin-unlock-input");
+      if(pinInput) pinInput.focus();
+      return;
+    }
     if(view.accountFilter!=="all" && !accountById(view.accountFilter)) view.accountFilter = "all";
     var bal = totalBalance(view.accountFilter);
     var monthList = visibleTransactions(view.year, view.month);
@@ -790,6 +844,78 @@
       renderCategoryPanel() +
       renderRecurringPanel() +
       renderAccountPanel() +
+      renderSecurityPanel() +
+    '</div>');
+  }
+
+  function renderLockScreen(){
+    return (
+    '<div class="lock-screen">' +
+      '<div class="lock-card">' +
+        '<div class="lock-glyph">🔒</div>' +
+        '<h1>Grand Livre verrouillé</h1>' +
+        '<p>Entrez votre code pour continuer.</p>' +
+        '<form id="pin-form-el">' +
+          '<input id="pin-unlock-input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="••••" required>' +
+          (lockError ? '<div class="lock-error">Code incorrect.</div>' : '') +
+          '<button type="submit" class="btn btn-primary">Déverrouiller</button>' +
+        '</form>' +
+        '<button type="button" class="lock-reset-link" data-act="reset-lock">Code oublié ? Réinitialiser le verrouillage</button>' +
+      '</div>' +
+    '</div>');
+  }
+
+  function renderSecurityPanel(){
+    var sec = state.security || {pinHash:null, autoLockMinutes:5};
+    var hasPin = !!sec.pinHash;
+    var autoLock = (sec.autoLockMinutes!=null) ? sec.autoLockMinutes : 5;
+    var autoLockOptions = [
+      {v:0, label:"Jamais (verrouille seulement en arrière-plan)"},
+      {v:1, label:"Après 1 minute d'inactivité"},
+      {v:5, label:"Après 5 minutes d'inactivité"},
+      {v:15, label:"Après 15 minutes d'inactivité"},
+      {v:30, label:"Après 30 minutes d'inactivité"}
+    ].map(function(o){
+      return '<option value="'+o.v+'"'+(autoLock===o.v?' selected':'')+'>'+o.label+'</option>';
+    }).join("");
+
+    var body;
+    if(!hasPin){
+      body = (
+        '<p class="security-hint">Ajoutez un code pour masquer vos données quand vous n\'utilisez pas l\'appli. ' +
+          'Ce code protège des regards indiscrets, pas les données elles-mêmes : ce n\'est pas un chiffrement.</p>' +
+        '<form id="pin-setup-form-el">' +
+          '<div class="entry-grid">' +
+            '<div class="field"><label for="pin-new">Nouveau code (4 à 8 chiffres)</label><input required id="pin-new" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off"></div>' +
+            '<div class="field"><label for="pin-confirm">Confirmer le code</label><input required id="pin-confirm" name="pinConfirm" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off"></div>' +
+            '<div class="btn-row"><button type="submit" class="btn btn-primary">Activer le verrouillage</button></div>' +
+          '</div>' +
+        '</form>'
+      );
+    } else {
+      body = (
+        '<div class="security-status">🔒 Verrouillage activé</div>' +
+        '<div class="field" style="max-width:280px; margin:10px 0 16px;">' +
+          '<label for="autolock-select">Verrouiller automatiquement</label>' +
+          '<select id="autolock-select" data-act="set-autolock">'+autoLockOptions+'</select>' +
+        '</div>' +
+        '<form id="pin-change-form-el">' +
+          '<div class="entry-grid">' +
+            '<div class="field"><label for="pin-new-2">Changer le code</label><input required id="pin-new-2" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off"></div>' +
+            '<div class="field"><label for="pin-confirm-2">Confirmer</label><input required id="pin-confirm-2" name="pinConfirm" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="off"></div>' +
+            '<div class="btn-row"><button type="submit" class="btn">Changer le code</button></div>' +
+          '</div>' +
+        '</form>' +
+        '<div class="btn-row" style="margin-top:12px;">' +
+          '<button type="button" class="btn btn-ghost" data-act="disable-lock">Désactiver le verrouillage</button>' +
+        '</div>'
+      );
+    }
+
+    return (
+    '<div class="panel">' +
+      '<div class="panel-head"><h2>Sécurité</h2></div>' +
+      '<div class="panel-body">' + body + '</div>' +
     '</div>');
   }
 
@@ -1024,6 +1150,12 @@
     if(transferForm) transferForm.addEventListener("submit", onTransferSubmit);
     var importInput = document.getElementById("import-input");
     if(importInput) importInput.addEventListener("change", onImportFile);
+    var pinUnlockForm = document.getElementById("pin-form-el");
+    if(pinUnlockForm) pinUnlockForm.addEventListener("submit", onPinUnlockSubmit);
+    var pinSetupForm = document.getElementById("pin-setup-form-el");
+    if(pinSetupForm) pinSetupForm.addEventListener("submit", onPinSetupSubmit);
+    var pinChangeForm = document.getElementById("pin-change-form-el");
+    if(pinChangeForm) pinChangeForm.addEventListener("submit", onPinChangeSubmit);
 
     // donut / legend hover sync
     document.querySelectorAll("[data-cat]").forEach(function(el){
@@ -1047,6 +1179,7 @@
   }
 
   function onAppClick(e){
+    lastActivityAt = Date.now();
     var t = e.target.closest("[data-act]");
     if(!t) return;
     var act = t.getAttribute("data-act");
@@ -1115,6 +1248,19 @@
     }
     else if(act==="check-update"){ checkForUpdate(); }
     else if(act==="apply-update"){ applyUpdate(); }
+    else if(act==="disable-lock"){
+      showConfirm("Désactiver le verrouillage ?", "Le code PIN sera supprimé. L'application ne le demandera plus à l'ouverture.", "Désactiver", function(){
+        state.security = {pinHash:null, autoLockMinutes: (state.security?state.security.autoLockMinutes:5)};
+        saveState(); render(); showToast("Verrouillage désactivé.");
+      });
+    }
+    else if(act==="reset-lock"){
+      showConfirm("Réinitialiser le verrouillage ?", "Le code PIN sera supprimé et l'application déverrouillée. Vos données restent intactes.", "Réinitialiser", function(){
+        state.security = {pinHash:null, autoLockMinutes:5};
+        locked = false; lockError = false; lastActivityAt = Date.now();
+        saveState(); render(); showToast("Verrouillage réinitialisé.");
+      });
+    }
     else if(act==="export-pdf"){ exportMonthPdf(); }
     else if(act==="export-json"){ exportJson(); }
     else if(act==="import-json"){ document.getElementById("import-input").click(); }
@@ -1127,16 +1273,26 @@
   }
 
   // Delegated "change" handler (fires on blur/Enter) for inline inputs that
-  // aren't part of a <form>, such as the per-category budget field.
+  // aren't part of a <form>, such as the per-category budget field and the
+  // auto-lock delay selector.
   function onAppChange(e){
-    var t = e.target.closest("[data-budget-cat]");
-    if(!t) return;
-    var cat = catById(t.getAttribute("data-budget-cat"));
-    if(!cat) return;
-    var val = parseFloat(t.value);
-    if(!val || val<=0){ delete cat.budget; }
-    else{ cat.budget = val; }
-    saveState(); render();
+    lastActivityAt = Date.now();
+    var budgetInput = e.target.closest("[data-budget-cat]");
+    if(budgetInput){
+      var cat = catById(budgetInput.getAttribute("data-budget-cat"));
+      if(!cat) return;
+      var val = parseFloat(budgetInput.value);
+      if(!val || val<=0){ delete cat.budget; }
+      else{ cat.budget = val; }
+      saveState(); render();
+      return;
+    }
+    if(e.target.id==="autolock-select"){
+      var minutes = parseInt(e.target.value,10);
+      if(!state.security) state.security = {pinHash:null, autoLockMinutes:5};
+      state.security.autoLockMinutes = isNaN(minutes) ? 5 : minutes;
+      saveState();
+    }
   }
 
   function shiftMonth(delta){
@@ -1429,6 +1585,67 @@
     }
   }
 
+  /* ===================== Verrouillage (code PIN) ===================== */
+  function onPinUnlockSubmit(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var pin = (fd.get("pin")||"").toString();
+    if(state.security && simpleHash(pin)===state.security.pinHash){
+      locked = false; lockError = false; lastActivityAt = Date.now();
+      render();
+    } else {
+      lockError = true; render();
+      var el = document.getElementById("pin-unlock-input");
+      if(el) el.focus();
+    }
+  }
+
+  function onPinSetupSubmit(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var pin = (fd.get("pin")||"").toString();
+    var confirmPin = (fd.get("pinConfirm")||"").toString();
+    if(pin.length<4){ showToast("Le code doit contenir au moins 4 chiffres."); return; }
+    if(pin!==confirmPin){ showToast("Les deux codes ne correspondent pas."); return; }
+    if(!state.security) state.security = {pinHash:null, autoLockMinutes:5};
+    state.security.pinHash = simpleHash(pin);
+    if(state.security.autoLockMinutes==null) state.security.autoLockMinutes = 5;
+    saveState(); render(); showToast("Verrouillage activé.");
+  }
+
+  function onPinChangeSubmit(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var pin = (fd.get("pin")||"").toString();
+    var confirmPin = (fd.get("pinConfirm")||"").toString();
+    if(pin.length<4){ showToast("Le code doit contenir au moins 4 chiffres."); return; }
+    if(pin!==confirmPin){ showToast("Les deux codes ne correspondent pas."); return; }
+    state.security.pinHash = simpleHash(pin);
+    saveState(); render(); showToast("Code mis à jour.");
+  }
+
+  function lockNow(){
+    if(locked) return;
+    if(!state.security || !state.security.pinHash) return;
+    locked = true; lockError = false;
+    render();
+  }
+
+  function checkAutoLock(){
+    if(locked) return;
+    if(!state.security || !state.security.pinHash) return;
+    var minutes = state.security.autoLockMinutes;
+    if(!minutes || minutes<=0) return; // 0 = only lock when backgrounded, not on inactivity
+    if(Date.now()-lastActivityAt >= minutes*60000) lockNow();
+  }
+
+  function initLockEngine(){
+    document.addEventListener("visibilitychange", function(){
+      if(document.hidden) lockNow();
+    });
+    setInterval(checkAutoLock, 15000);
+  }
+
   /* ===================== Service worker / mises à jour ===================== */
   // Only meaningful for the installed-PWA build (served over HTTPS with sw.js
   // present) — in the Claude artifact or a bare file:// open, registration
@@ -1492,12 +1709,14 @@
   /* ===================== Boot ===================== */
   document.getElementById("app").addEventListener("click", onAppClick);
   document.getElementById("app").addEventListener("change", onAppChange);
+  document.getElementById("app").addEventListener("input", function(){ lastActivityAt = Date.now(); });
 
   if(window.claude && typeof window.claude.use === "function"){
     window.claude.use("downloads").then(function(ns){ window.__glDownloads = ns; }).catch(function(){});
   }
 
   initServiceWorker();
+  initLockEngine();
   runRecurringEngine();
   render();
 })();
