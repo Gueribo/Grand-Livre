@@ -109,6 +109,15 @@
   .masthead .brand{ display:flex; flex-direction:column; gap:4px; }
   .brand .kicker{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); }
   .brand h1{ font-size: 26px; }
+  .brand-top-row{ display:flex; align-items:center; gap:8px; }
+  .update-check-btn{ width:22px; height:22px; font-size:13px; border-radius:6px; flex:none; }
+  .update-check-btn.checking{ animation: spin .8s linear infinite; }
+  @keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  .update-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent);
+    border-radius:12px; padding:11px 16px; margin-bottom:14px; font-size:13.5px; font-weight:500;
+  }
   .balance-block{ text-align:right; }
   .balance-block .label{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-bottom:2px; }
   .balance-figure{ font-size:38px; font-weight:600; line-height:1; }
@@ -572,6 +581,7 @@
     var totals = computeTotals(monthList);
 
     document.getElementById("app").innerHTML =
+      renderUpdateBanner() +
       renderMasthead(bal) +
       renderStats(totals) +
       '<div class="layout">' +
@@ -582,6 +592,15 @@
       '<footer class="note">Vos données restent uniquement dans ce navigateur — pensez à exporter une sauvegarde de temps en temps.</footer>';
 
     bindEvents();
+  }
+
+  function renderUpdateBanner(){
+    if(!swUpdateReady) return "";
+    return (
+    '<div class="update-banner">' +
+      '<span>✓ Une nouvelle version de Grand Livre est prête.</span>' +
+      '<button type="button" class="btn btn-primary" data-act="apply-update">Mettre à jour</button>' +
+    '</div>');
   }
 
   function renderAccountTabs(){
@@ -608,7 +627,10 @@
     return (
     '<div class="masthead">' +
       '<div class="brand">' +
-        '<span class="kicker">Grand Livre — registre personnel</span>' +
+        '<div class="brand-top-row">' +
+          '<span class="kicker">Grand Livre — registre personnel</span>' +
+          (SW_SUPPORTED && !swUpdateReady ? '<button type="button" class="icon-btn update-check-btn'+(swChecking?' checking':'')+'" data-act="check-update" title="Vérifier les mises à jour" aria-label="Vérifier les mises à jour"'+(swChecking?' disabled':'')+'>⟳</button>' : '') +
+        '</div>' +
         '<h1>Mes finances</h1>' +
         '<div class="month-nav">' +
           '<button data-act="prev-month" aria-label="Mois précédent">‹</button>' +
@@ -1091,6 +1113,8 @@
         saveState(); render(); showToast("Récurrence supprimée.");
       });
     }
+    else if(act==="check-update"){ checkForUpdate(); }
+    else if(act==="apply-update"){ applyUpdate(); }
     else if(act==="export-pdf"){ exportMonthPdf(); }
     else if(act==="export-json"){ exportJson(); }
     else if(act==="import-json"){ document.getElementById("import-input").click(); }
@@ -1405,6 +1429,66 @@
     }
   }
 
+  /* ===================== Service worker / mises à jour ===================== */
+  // Only meaningful for the installed-PWA build (served over HTTPS with sw.js
+  // present) — in the Claude artifact or a bare file:// open, registration
+  // simply fails and everything below stays inert.
+  var SW_SUPPORTED = ("serviceWorker" in navigator);
+  var swReg = null;
+  var swChecking = false;
+  var swUpdateReady = false;
+
+  function initServiceWorker(){
+    if(!SW_SUPPORTED) return;
+    window.addEventListener("load", function(){
+      // Captured before registration: sw.js calls clients.claim(), which
+      // makes navigator.serviceWorker.controller truthy as soon as THIS
+      // install activates — even the very first one. So checking the
+      // controller *after* activation can't tell "first install" from "real
+      // update"; only whether one already existed *before* we registered can.
+      var hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register("./sw.js").then(function(reg){
+        swReg = reg;
+        if(reg.waiting && hadController){
+          swUpdateReady = true; render();
+        }
+        reg.addEventListener("updatefound", function(){
+          var installing = reg.installing;
+          if(!installing) return;
+          installing.addEventListener("statechange", function(){
+            if(installing.state==="activated" && hadController){
+              swChecking = false;
+              swUpdateReady = true;
+              render();
+            }
+          });
+        });
+      }).catch(function(){});
+    });
+  }
+
+  function checkForUpdate(){
+    if(!SW_SUPPORTED){ showToast("Mises à jour automatiques indisponibles dans ce mode."); return; }
+    if(!swReg){ showToast("Service worker indisponible pour le moment."); return; }
+    if(swUpdateReady || swChecking) return;
+    swChecking = true; render();
+    swReg.update().catch(function(){}).then(function(){
+      // Give the browser a moment to detect/install a changed sw.js before
+      // deciding there's nothing new — updatefound (above) wins the race if
+      // a real update exists and flips swUpdateReady itself.
+      setTimeout(function(){
+        if(!swUpdateReady){
+          swChecking = false; render();
+          showToast("Vous avez déjà la dernière version.");
+        }
+      }, 1500);
+    });
+  }
+
+  function applyUpdate(){
+    window.location.reload();
+  }
+
   /* ===================== Boot ===================== */
   document.getElementById("app").addEventListener("click", onAppClick);
   document.getElementById("app").addEventListener("change", onAppChange);
@@ -1413,18 +1497,10 @@
     window.claude.use("downloads").then(function(ns){ window.__glDownloads = ns; }).catch(function(){});
   }
 
+  initServiceWorker();
   runRecurringEngine();
   render();
 })();
 </script>
-
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    });
-  }
-</script>
-
 </body>
 </html>
