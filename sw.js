@@ -3,7 +3,7 @@
 // first visit, and opportunistically caches everything else it fetches
 // (Google Fonts, the jsPDF library) so those keep working offline too.
 
-const CACHE_NAME = "grand-livre-v2";
+const CACHE_NAME = "grand-livre-v6";
 
 const APP_SHELL = [
   "./",

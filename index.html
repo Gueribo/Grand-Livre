@@ -6,8 +6,8 @@
 <title>Grand Livre</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1f6650">
-<link rel="icon" href="./icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Grand Livre">
@@ -115,7 +115,7 @@
   .balance-figure.neg{ color:var(--debit); }
   .balance-figure.pos{ color:var(--ink); }
 
-  .month-nav{ display:flex; align-items:center; gap:10px; }
+  .month-nav{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .month-nav button{
     width:32px; height:32px; border-radius:8px; border:1px solid var(--line-strong);
     background:var(--surface-2); color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
@@ -124,7 +124,7 @@
   .month-nav button:hover{ background:var(--accent-soft); border-color:var(--accent); }
   .month-nav .current{ font-family:"Spectral",serif; font-size:16px; min-width:150px; text-align:center; text-transform:capitalize; }
   .month-nav .today-btn{
-    width:auto; padding:0 10px; font-size:11px; font-family:"Public Sans",sans-serif; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2);
+    width:auto; padding:0 10px; font-size:11px; font-family:"Public Sans",sans-serif; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2); white-space:nowrap;
   }
 
   .account-tabs{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
@@ -145,8 +145,9 @@
 
   /* ---------- Stat tiles ---------- */
   .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+  @media (max-width: 640px){ .stats{ grid-template-columns:1fr; } }
   .stat{
-    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; min-width:0;
   }
   .stat .label{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
   .stat .dot{ width:8px; height:8px; border-radius:50%; }
@@ -236,12 +237,19 @@
   .donut-center .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); margin-top:2px; }
   .legend{ list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
   .legend li{
-    display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:7px; cursor:default; font-size:13px;
+    display:flex; flex-direction:column; gap:5px; padding:6px 4px; border-radius:7px; cursor:default; font-size:13px;
   }
   .legend li:hover{ background:var(--surface-2); }
+  .legend-row{ display:flex; align-items:center; gap:9px; }
   .legend .name{ flex:1; color:var(--ink); }
   .legend .pct{ color:var(--ink-3); font-size:11.5px; width:36px; text-align:right; }
   .legend .val{ width:78px; text-align:right; font-size:12.5px; }
+  .budget-bar-row{ display:flex; align-items:center; gap:8px; padding-left:18px; }
+  .budget-bar{ flex:1; height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden; }
+  .budget-bar-fill{ height:100%; border-radius:3px; background:var(--accent); transition:width .15s; }
+  .budget-bar-fill.warn{ background:var(--gold); }
+  .budget-bar-fill.over{ background:var(--debit); }
+  .budget-bar-label{ font-size:11px; color:var(--ink-3); white-space:nowrap; flex:none; }
   .seg{ transition: stroke-width .12s, opacity .12s; cursor:default; }
   .seg.dim{ opacity:.35; }
 
@@ -255,10 +263,17 @@
 
   /* ---------- Categories panel ---------- */
   .cat-list{ list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:2px; }
-  .cat-list li{ display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:7px; font-size:13px; }
+  .cat-list li{ display:flex; align-items:center; gap:9px; padding:6px 4px; border-radius:7px; font-size:13px; flex-wrap:wrap; }
   .cat-list li:hover{ background:var(--surface-2); }
-  .cat-list .cname{ flex:1; }
+  .cat-list .cname{ flex:1; min-width:60px; }
   .cat-list .ctype{ font-size:10.5px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.05em; }
+  .cat-budget-input{
+    width:92px; font-size:12px; padding:4px 7px; border-radius:6px; border:1px solid var(--line-strong);
+    background:var(--surface); color:var(--ink); font-family:"IBM Plex Mono",monospace;
+  }
+  .cat-budget-input::placeholder{ font-family:"Public Sans",sans-serif; color:var(--ink-3); }
+  .cat-budget-input:focus{ outline:none; border-color:var(--accent); }
+  .rec-meta{ font-size:11.5px; color:var(--ink-3); white-space:nowrap; flex:none; }
   .cat-add{ border-top:1px solid var(--line); padding-top:14px; }
   .swatches{ display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
   .swatch{
@@ -350,11 +365,12 @@
     {id:"acc_default", name:"Compte courant", kind:"courant"}
   ];
 
-  function blankState(){ return { accounts: DEFAULT_ACCOUNTS.slice(), categories: DEFAULT_CATEGORIES.slice(), transactions: [] }; }
+  function blankState(){ return { accounts: DEFAULT_ACCOUNTS.slice(), categories: DEFAULT_CATEGORIES.slice(), transactions: [], recurring: [] }; }
 
   // Brings any saved/imported state up to the current shape: ensures at least
-  // one account exists, and back-fills accountId on transactions saved before
-  // multi-account support existed.
+  // one account exists, back-fills accountId on transactions saved before
+  // multi-account support existed, and ensures a recurring-rules array exists
+  // for saves made before that feature existed.
   function normalizeState(parsed){
     if(!parsed || !Array.isArray(parsed.categories) || !Array.isArray(parsed.transactions)) return blankState();
     if(!Array.isArray(parsed.accounts) || !parsed.accounts.length){
@@ -364,6 +380,7 @@
     parsed.transactions.forEach(function(t){
       if(!t.accountId) t.accountId = defaultId;
     });
+    if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
     return parsed;
   }
 
@@ -397,7 +414,8 @@
     editingId: null,
     catFilterType: "expense",
     accountFilter: "all",
-    hoverCat: null
+    hoverCat: null,
+    recurringType: "expense"
   };
 
   /* ===================== Helpers ===================== */
@@ -441,6 +459,7 @@
     var income=0, expense=0;
     var byCat = {};
     list.forEach(function(t){
+      if(t.isTransfer) return; // money moving between the user's own accounts isn't real income/expense
       if(t.type==="income"){ income += t.amount; }
       else{
         expense += t.amount;
@@ -457,6 +476,52 @@
       bal += (t.type==="income" ? t.amount : -t.amount);
     });
     return bal;
+  }
+
+  /* ===================== Recurring transactions ===================== */
+  function monthKey(y,m){ return y + "-" + pad(m+1); }
+  function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
+
+  function generateRecurringOccurrence(rule, y, m){
+    var day = Math.min(rule.day, daysInMonth(y,m));
+    var date = y + "-" + pad(m+1) + "-" + pad(day);
+    state.transactions.push({
+      id: uid(), type: rule.type, amount: rule.amount, categoryId: rule.categoryId,
+      accountId: rule.accountId, date: date, note: rule.note || "", recurringId: rule.id
+    });
+  }
+
+  // Runs at boot (and right after a rule is created) to back-fill every
+  // month's occurrence between a rule's creation and the current month that
+  // hasn't been generated yet. Idempotent: each rule remembers the last
+  // month it generated, so re-running never duplicates an occurrence.
+  function runRecurringEngine(){
+    if(!state.recurring || !state.recurring.length) return;
+    var now = new Date();
+    var curY = now.getFullYear(), curM = now.getMonth();
+    var changed = false;
+    state.recurring.forEach(function(rule){
+      if(!rule.active) return;
+      var start;
+      if(rule.lastGeneratedMonth){
+        var p = rule.lastGeneratedMonth.split("-");
+        start = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, 1);
+        start.setMonth(start.getMonth()+1);
+      } else {
+        var c = (rule.createdMonth||monthKey(curY,curM)).split("-");
+        start = new Date(parseInt(c[0],10), parseInt(c[1],10)-1, 1);
+      }
+      var cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      var guard = 0;
+      while((cursor.getFullYear()<curY || (cursor.getFullYear()===curY && cursor.getMonth()<=curM)) && guard<600){
+        generateRecurringOccurrence(rule, cursor.getFullYear(), cursor.getMonth());
+        rule.lastGeneratedMonth = monthKey(cursor.getFullYear(), cursor.getMonth());
+        changed = true;
+        cursor.setMonth(cursor.getMonth()+1);
+        guard++;
+      }
+    });
+    if(changed) saveState();
   }
 
   /* ===================== Toast & modal ===================== */
@@ -583,6 +648,18 @@
     var isEdit = !!view.editingId;
     var editing = isEdit ? state.transactions.find(function(t){return t.id===view.editingId;}) : null;
     var type = editing ? editing.type : view.entryType;
+
+    var toggle = (
+    '<div class="type-toggle" role="group" aria-label="Type de transaction">' +
+      '<button type="button" data-act="set-type" data-type="income" class="'+(type==="income"?"active":"")+'">Revenu</button>' +
+      '<button type="button" data-act="set-type" data-type="expense" class="'+(type==="expense"?"active":"")+'">Dépense</button>' +
+      (state.accounts.length>1 ? '<button type="button" data-act="set-type" data-type="transfer" class="'+(type==="transfer"?"active":"")+'">Virement</button>' : '') +
+    '</div>');
+
+    if(type==="transfer"){
+      return '<div class="entry-form">' + toggle + renderTransferFields() + '</div>';
+    }
+
     var cats = categoriesByType(type);
     var catOptions = cats.map(function(c){
       return '<option value="'+c.id+'"'+(editing && editing.categoryId===c.id ? ' selected':'')+'>'+escapeHtml(c.name)+'</option>';
@@ -594,17 +671,14 @@
     var showAccountField = state.accounts.length>1;
     return (
     '<div class="entry-form">' +
-      '<div class="type-toggle" role="group" aria-label="Type de transaction">' +
-        '<button type="button" data-act="set-type" data-type="income" class="'+(type==="income"?"active":"")+'">Revenu</button>' +
-        '<button type="button" data-act="set-type" data-type="expense" class="'+(type==="expense"?"active":"")+'">Dépense</button>' +
-      '</div>' +
+      toggle +
       '<form id="entry-form-el">' +
         '<div class="entry-grid">' +
-          '<div class="field"><label for="f-amount">Montant</label><input required id="f-amount" name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="0,00" value="'+(editing?editing.amount:'')+'"></div>' +
+          '<div class="field"><label for="f-amount">Montant</label><input required id="f-amount" name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" autocomplete="off" placeholder="0,00" value="'+(editing?editing.amount:'')+'"></div>' +
           (showAccountField ? '<div class="field"><label for="f-account">Compte</label><select id="f-account" name="accountId">'+accOptions+'</select></div>' : '<input type="hidden" name="accountId" value="'+defaultAccountId+'">') +
           '<div class="field"><label for="f-cat">Catégorie</label><select id="f-cat" name="categoryId">'+catOptions+'</select></div>' +
-          '<div class="field"><label for="f-date">Date</label><input required id="f-date" name="date" type="date" value="'+(editing?editing.date:todayISO())+'"></div>' +
-          '<div class="field field-note"><label for="f-note">Note (facultatif)</label><input id="f-note" name="note" type="text" maxlength="80" placeholder="ex. Courses Monoprix" value="'+(editing?escapeHtml(editing.note||""):'')+'"></div>' +
+          '<div class="field"><label for="f-date">Date</label><input required id="f-date" name="date" type="date" autocomplete="off" value="'+(editing?editing.date:todayISO())+'"></div>' +
+          '<div class="field field-note"><label for="f-note">Note (facultatif)</label><input id="f-note" name="note" type="text" maxlength="80" autocomplete="off" placeholder="ex. Courses Super U" value="'+(editing?escapeHtml(editing.note||""):'')+'"></div>' +
           '<div class="btn-row">' +
             '<button type="submit" class="btn btn-primary">'+(isEdit?"Enregistrer":"Ajouter")+'</button>' +
             (isEdit ? '<button type="button" class="btn btn-ghost" data-act="cancel-edit">Annuler</button>' : '') +
@@ -614,23 +688,55 @@
     '</div>');
   }
 
+  function renderTransferFields(){
+    if(state.accounts.length<2){
+      return '<p style="padding:0 18px 14px;color:var(--ink-3);font-size:12.5px;">Ajoutez un second compte pour pouvoir faire un virement.</p>';
+    }
+    var fromOptions = state.accounts.map(function(a,i){
+      return '<option value="'+a.id+'"'+(i===0?' selected':'')+'>'+kindIcon(a.kind)+' '+escapeHtml(a.name)+'</option>';
+    }).join("");
+    var toOptions = state.accounts.map(function(a,i){
+      return '<option value="'+a.id+'"'+(i===1?' selected':'')+'>'+kindIcon(a.kind)+' '+escapeHtml(a.name)+'</option>';
+    }).join("");
+    return (
+    '<form id="transfer-form-el">' +
+      '<div class="entry-grid">' +
+        '<div class="field"><label for="tr-amount">Montant</label><input required id="tr-amount" name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" autocomplete="off" placeholder="0,00"></div>' +
+        '<div class="field"><label for="tr-from">De</label><select id="tr-from" name="fromAccountId">'+fromOptions+'</select></div>' +
+        '<div class="field"><label for="tr-to">Vers</label><select id="tr-to" name="toAccountId">'+toOptions+'</select></div>' +
+        '<div class="field"><label for="tr-date">Date</label><input required id="tr-date" name="date" type="date" autocomplete="off" value="'+todayISO()+'"></div>' +
+        '<div class="field field-note"><label for="tr-note">Note (facultatif)</label><input id="tr-note" name="note" type="text" maxlength="80" autocomplete="off" placeholder="ex. Épargne mensuelle"></div>' +
+        '<div class="btn-row"><button type="submit" class="btn btn-primary">Virer</button></div>' +
+      '</div>' +
+    '</form>');
+  }
+
   function renderRegisterTable(sorted){
     var showAccount = view.accountFilter==="all" && state.accounts.length>1;
     var rows = sorted.map(function(t){
-      var c = catById(t.categoryId);
-      var cname = c ? c.name : "Catégorie supprimée";
-      var ccolor = c ? colorVar(c.color) : colorVar("--ink-3");
+      var isTransfer = !!t.isTransfer;
+      var cname, ccolor;
+      if(isTransfer){
+        var other = accountById(t.transferAccountId);
+        var oname = other ? other.name : "compte supprimé";
+        cname = (t.type==="expense" ? "→ " : "← ") + oname;
+        ccolor = colorVar("--ink-3");
+      } else {
+        var c = catById(t.categoryId);
+        cname = c ? c.name : "Catégorie supprimée";
+        ccolor = c ? colorVar(c.color) : colorVar("--ink-3");
+      }
       var a = accountById(t.accountId);
       return (
       '<tr data-id="'+t.id+'">' +
         '<td class="mono">'+fmtDateShort.format(new Date(t.date+"T00:00:00"))+'</td>' +
         (showAccount ? '<td><span class="acc-pill">'+(a?kindIcon(a.kind):"📁")+' '+escapeHtml(a?a.name:"Compte supprimé")+'</span></td>' : '') +
         '<td><span class="cat-tag"><span class="cat-dot" style="background:'+ccolor+'"></span>'+escapeHtml(cname)+'</span></td>' +
-        '<td class="note-cell">'+(t.note?escapeHtml(t.note):'—')+'</td>' +
+        '<td class="note-cell">'+(t.note?escapeHtml(t.note):(isTransfer?'Virement':'—'))+'</td>' +
         '<td class="col-amount mono amount '+t.type+'">'+signedMoney(t.amount,t.type)+'</td>' +
         '<td><div class="row-actions">' +
-          '<button class="icon-btn" data-act="edit-tx" data-id="'+t.id+'" aria-label="Modifier" title="Modifier">✎</button>' +
-          '<button class="icon-btn" data-act="delete-tx" data-id="'+t.id+'" aria-label="Supprimer" title="Supprimer">✕</button>' +
+          (isTransfer ? '' : '<button class="icon-btn" data-act="edit-tx" data-id="'+t.id+'" aria-label="Modifier" title="Modifier">✎</button>') +
+          '<button class="icon-btn" data-act="delete-tx" data-id="'+t.id+'" aria-label="Supprimer" title="'+(isTransfer?"Supprimer le virement":"Supprimer")+'">✕</button>' +
         '</div></td>' +
       '</tr>');
     }).join("");
@@ -654,7 +760,64 @@
     '<div style="display:flex; flex-direction:column; gap:18px;">' +
       renderChartPanel(totals) +
       renderCategoryPanel() +
+      renderRecurringPanel() +
       renderAccountPanel() +
+    '</div>');
+  }
+
+  function renderRecurringPanel(){
+    var rules = state.recurring || [];
+    var items = rules.map(function(r){
+      var cat = catById(r.categoryId);
+      var cname = cat ? cat.name : "Catégorie supprimée";
+      var ccolor = cat ? colorVar(cat.color) : colorVar("--ink-3");
+      var acc = accountById(r.accountId);
+      return (
+      '<li'+(r.active?'':' style="opacity:.45;"')+'>' +
+        '<span class="cat-dot" style="background:'+ccolor+'"></span>' +
+        '<span class="cname">'+escapeHtml(cname)+(r.note?' — '+escapeHtml(r.note):'')+
+          (state.accounts.length>1 ? ' <span style="color:var(--ink-3);font-size:11px;">('+escapeHtml(acc?acc.name:"compte supprimé")+')</span>' : '')+
+        '</span>' +
+        '<span class="rec-meta mono">'+signedMoney(r.amount,r.type)+' · le '+r.day+'</span>' +
+        '<button class="icon-btn" data-act="toggle-recurring" data-id="'+r.id+'" title="'+(r.active?"Mettre en pause":"Reprendre")+'">'+(r.active?"⏸":"▶")+'</button>' +
+        '<button class="icon-btn" data-act="delete-recurring" data-id="'+r.id+'" title="Supprimer">✕</button>' +
+      '</li>');
+    }).join("");
+
+    var type = view.recurringType;
+    var cats = categoriesByType(type);
+    var catOptions = cats.length
+      ? cats.map(function(c){ return '<option value="'+c.id+'">'+escapeHtml(c.name)+'</option>'; }).join("")
+      : '';
+    var accOptions = state.accounts.map(function(a){
+      return '<option value="'+a.id+'">'+kindIcon(a.kind)+' '+escapeHtml(a.name)+'</option>';
+    }).join("");
+    var showAccountField = state.accounts.length>1;
+
+    return (
+    '<div class="panel">' +
+      '<div class="panel-head"><h2>Récurrences</h2></div>' +
+      '<div class="panel-body">' +
+        '<ul class="cat-list">'+(items || '<li style="color:var(--ink-3)">Aucune récurrence — un loyer, un abonnement, un salaire…</li>')+'</ul>' +
+        '<div class="cat-add">' +
+          '<div class="type-toggle" role="group" aria-label="Type de récurrence" style="margin-bottom:12px;">' +
+            '<button type="button" data-act="rec-set-type" data-type="income" class="'+(type==="income"?"active":"")+'">Revenu</button>' +
+            '<button type="button" data-act="rec-set-type" data-type="expense" class="'+(type==="expense"?"active":"")+'">Dépense</button>' +
+          '</div>' +
+          (cats.length ? (
+          '<form id="rec-form-el">' +
+            '<div class="entry-grid">' +
+              '<div class="field"><label for="rec-amount">Montant</label><input required id="rec-amount" name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" autocomplete="off" placeholder="0,00"></div>' +
+              (showAccountField ? '<div class="field"><label for="rec-account">Compte</label><select id="rec-account" name="accountId">'+accOptions+'</select></div>' : '<input type="hidden" name="accountId" value="'+state.accounts[0].id+'">') +
+              '<div class="field"><label for="rec-cat">Catégorie</label><select id="rec-cat" name="categoryId">'+catOptions+'</select></div>' +
+              '<div class="field" style="flex-basis:90px;"><label for="rec-day">Jour du mois</label><input required id="rec-day" name="day" type="number" min="1" max="31" step="1" value="1" autocomplete="off"></div>' +
+              '<div class="field field-note"><label for="rec-note">Note (facultatif)</label><input id="rec-note" name="note" type="text" maxlength="80" autocomplete="off" placeholder="ex. Loyer"></div>' +
+              '<div class="btn-row"><button type="submit" class="btn">Ajouter la récurrence</button></div>' +
+            '</div>' +
+          '</form>'
+          ) : '<p style="color:var(--ink-3); font-size:12.5px; margin:0;">Créez d\'abord une catégorie de ce type.</p>') +
+        '</div>' +
+      '</div>' +
     '</div>');
   }
 
@@ -683,7 +846,7 @@
         '<div class="cat-add">' +
           '<form id="acc-form-el">' +
             '<div class="entry-grid">' +
-              '<div class="field"><label for="new-acc-name">Nom du compte</label><input id="new-acc-name" name="name" type="text" maxlength="30" placeholder="ex. Carte Visa" required></div>' +
+              '<div class="field"><label for="new-acc-name">Nom du compte</label><input id="new-acc-name" name="name" type="text" maxlength="30" autocomplete="off" placeholder="ex. Carte Visa" required></div>' +
               '<div class="field"><label for="new-acc-kind">Type</label><select id="new-acc-kind" name="kind">'+kindOptions+'</select></div>' +
               '<div class="btn-row"><button type="submit" class="btn">Ajouter le compte</button></div>' +
             '</div>' +
@@ -734,12 +897,26 @@
   function renderLegend(entries, total){
     var items = entries.map(function(e){
       var pct = Math.round((e.value/total)*100);
+      var cat = catById(e.id);
+      var budgetRow = "";
+      if(cat && cat.budget>0){
+        var used = Math.round((e.value/cat.budget)*100);
+        var barClass = used>100 ? "over" : (used>=80 ? "warn" : "");
+        budgetRow = (
+        '<div class="budget-bar-row">' +
+          '<div class="budget-bar"><div class="budget-bar-fill '+barClass+'" style="width:'+Math.min(used,100)+'%"></div></div>' +
+          '<span class="budget-bar-label mono">'+money(e.value)+' / '+money(cat.budget)+'</span>' +
+        '</div>');
+      }
       return (
       '<li data-cat="'+e.id+'">' +
-        '<span class="cat-dot" style="background:'+colorVar(e.color)+'"></span>' +
-        '<span class="name">'+escapeHtml(e.name)+'</span>' +
-        '<span class="pct">'+pct+'%</span>' +
-        '<span class="val mono">'+money(e.value)+'</span>' +
+        '<div class="legend-row">' +
+          '<span class="cat-dot" style="background:'+colorVar(e.color)+'"></span>' +
+          '<span class="name">'+escapeHtml(e.name)+'</span>' +
+          '<span class="pct">'+pct+'%</span>' +
+          '<span class="val mono">'+money(e.value)+'</span>' +
+        '</div>' +
+        budgetRow +
       '</li>');
     }).join("");
     return '<ul class="legend">'+items+'</ul>';
@@ -751,10 +928,13 @@
     state.transactions.forEach(function(t){ usage[t.categoryId]=(usage[t.categoryId]||0)+1; });
     var items = list.map(function(c){
       var inUse = usage[c.id]>0;
+      var budgetField = view.catFilterType==="expense" ?
+        '<input type="number" inputmode="decimal" class="cat-budget-input" data-budget-cat="'+c.id+'" min="0" step="10" placeholder="Budget (€)" autocomplete="off" value="'+(c.budget?c.budget:"")+'">' : '';
       return (
       '<li>' +
         '<span class="cat-dot" style="background:'+colorVar(c.color)+'"></span>' +
         '<span class="cname">'+escapeHtml(c.name)+'</span>' +
+        budgetField +
         '<button class="icon-btn" data-act="delete-cat" data-id="'+c.id+'" title="'+(inUse?"Utilisée par des écritures — supprimez-les d'abord":"Supprimer la catégorie")+'" '+(inUse?"disabled style=\"opacity:.3;cursor:not-allowed;\"":'')+'>✕</button>' +
       '</li>');
     }).join("");
@@ -774,7 +954,7 @@
         '<div class="cat-add">' +
           '<form id="cat-form-el">' +
             '<div class="field"><label for="new-cat-name">Nouvelle catégorie ('+(view.catFilterType==="expense"?"dépense":"revenu")+')</label>' +
-            '<input id="new-cat-name" name="name" type="text" maxlength="30" placeholder="ex. Cadeaux" required></div>' +
+            '<input id="new-cat-name" name="name" type="text" maxlength="30" autocomplete="off" placeholder="ex. Cadeaux" required></div>' +
             (view.catFilterType==="expense" ? '<div class="swatches" id="swatch-row">'+swatches+'</div>' : '') +
             '<div class="btn-row" style="margin-top:10px;"><button type="submit" class="btn">Ajouter la catégorie</button></div>' +
           '</form>' +
@@ -810,6 +990,10 @@
     if(catForm) catForm.addEventListener("submit", onCatSubmit);
     var accForm = document.getElementById("acc-form-el");
     if(accForm) accForm.addEventListener("submit", onAccSubmit);
+    var recForm = document.getElementById("rec-form-el");
+    if(recForm) recForm.addEventListener("submit", onRecSubmit);
+    var transferForm = document.getElementById("transfer-form-el");
+    if(transferForm) transferForm.addEventListener("submit", onTransferSubmit);
     var importInput = document.getElementById("import-input");
     if(importInput) importInput.addEventListener("change", onImportFile);
 
@@ -844,13 +1028,28 @@
     else if(act==="today-month"){ var now=new Date(); view.year=now.getFullYear(); view.month=now.getMonth(); render(); }
     else if(act==="set-type"){ view.entryType = t.getAttribute("data-type"); view.editingId=null; render(); }
     else if(act==="cancel-edit"){ view.editingId=null; render(); }
-    else if(act==="edit-tx"){ view.editingId = t.getAttribute("data-id"); var tx=state.transactions.find(function(x){return x.id===view.editingId;}); if(tx) view.entryType=tx.type; render(); document.getElementById("f-amount").focus(); }
+    else if(act==="edit-tx"){
+      var editTx=state.transactions.find(function(x){return x.id===t.getAttribute("data-id");});
+      if(!editTx || editTx.isTransfer) return; // transfers aren't edited, only deleted (both legs together)
+      view.editingId = editTx.id; view.entryType=editTx.type; render(); document.getElementById("f-amount").focus();
+    }
     else if(act==="delete-tx"){
       var id = t.getAttribute("data-id");
-      showConfirm("Supprimer cette écriture ?", "Cette action est définitive.", "Supprimer", function(){
-        state.transactions = state.transactions.filter(function(x){return x.id!==id;});
-        saveState(); render(); showToast("Écriture supprimée.");
-      });
+      var delTx = state.transactions.find(function(x){return x.id===id;});
+      var isTransferDelete = delTx && delTx.isTransfer;
+      showConfirm(
+        isTransferDelete ? "Supprimer ce virement ?" : "Supprimer cette écriture ?",
+        isTransferDelete ? "Les deux écritures liées à ce virement seront supprimées." : "Cette action est définitive.",
+        "Supprimer",
+        function(){
+          if(isTransferDelete && delTx.transferPeer){
+            state.transactions = state.transactions.filter(function(x){return x.id!==id && x.id!==delTx.transferPeer;});
+          } else {
+            state.transactions = state.transactions.filter(function(x){return x.id!==id;});
+          }
+          saveState(); render(); showToast(isTransferDelete ? "Virement supprimé." : "Écriture supprimée.");
+        }
+      );
     }
     else if(act==="delete-cat"){
       var cid = t.getAttribute("data-id");
@@ -869,6 +1068,23 @@
     }
     else if(act==="acc-filter"){ view.accountFilter = t.getAttribute("data-id"); render(); }
     else if(act==="cat-tab"){ view.catFilterType = t.getAttribute("data-type"); render(); }
+    else if(act==="rec-set-type"){ view.recurringType = t.getAttribute("data-type"); render(); }
+    else if(act==="toggle-recurring"){
+      var rid = t.getAttribute("data-id");
+      var rule = (state.recurring||[]).find(function(x){return x.id===rid;});
+      if(rule){
+        rule.active = !rule.active;
+        if(rule.active) runRecurringEngine();
+        saveState(); render(); showToast(rule.active ? "Récurrence reprise." : "Récurrence mise en pause.");
+      }
+    }
+    else if(act==="delete-recurring"){
+      var did = t.getAttribute("data-id");
+      showConfirm("Supprimer cette récurrence ?", "Les écritures déjà générées resteront dans le registre ; seules les prochaines générations s'arrêtent.", "Supprimer", function(){
+        state.recurring = (state.recurring||[]).filter(function(x){return x.id!==did;});
+        saveState(); render(); showToast("Récurrence supprimée.");
+      });
+    }
     else if(act==="export-pdf"){ exportMonthPdf(); }
     else if(act==="export-json"){ exportJson(); }
     else if(act==="import-json"){ document.getElementById("import-input").click(); }
@@ -878,6 +1094,19 @@
       t.classList.add("selected");
       row.dataset.selected = t.getAttribute("data-swatch");
     }
+  }
+
+  // Delegated "change" handler (fires on blur/Enter) for inline inputs that
+  // aren't part of a <form>, such as the per-category budget field.
+  function onAppChange(e){
+    var t = e.target.closest("[data-budget-cat]");
+    if(!t) return;
+    var cat = catById(t.getAttribute("data-budget-cat"));
+    if(!cat) return;
+    var val = parseFloat(t.value);
+    if(!val || val<=0){ delete cat.budget; }
+    else{ cat.budget = val; }
+    saveState(); render();
   }
 
   function shiftMonth(delta){
@@ -908,6 +1137,29 @@
     }
   }
 
+  function onTransferSubmit(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var amount = parseFloat(fd.get("amount"));
+    if(!amount || amount<=0){ showToast("Entrez un montant valide."); return; }
+    var fromId = fd.get("fromAccountId");
+    var toId = fd.get("toAccountId");
+    if(!fromId || !toId || fromId===toId){ showToast("Choisissez deux comptes différents."); return; }
+    var date = fd.get("date") || todayISO();
+    var note = (fd.get("note")||"").toString().slice(0,80);
+    var tid = uid();
+    var outId = uid(), inId = uid();
+    state.transactions.push({
+      id: outId, type:"expense", amount: amount, categoryId: null, accountId: fromId, date: date, note: note,
+      isTransfer: true, transferId: tid, transferPeer: inId, transferAccountId: toId
+    });
+    state.transactions.push({
+      id: inId, type:"income", amount: amount, categoryId: null, accountId: toId, date: date, note: note,
+      isTransfer: true, transferId: tid, transferPeer: outId, transferAccountId: fromId
+    });
+    saveState(); render(); showToast("Virement effectué.");
+  }
+
   function onAccSubmit(e){
     e.preventDefault();
     var fd = new FormData(e.target);
@@ -917,6 +1169,28 @@
     var acc = { id:"acc_"+uid(), name:name, kind:kind };
     state.accounts.push(acc);
     saveState(); render(); showToast("Compte ajouté.");
+  }
+
+  function onRecSubmit(e){
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var amount = parseFloat(fd.get("amount"));
+    if(!amount || amount<=0){ showToast("Entrez un montant valide."); return; }
+    var categoryId = fd.get("categoryId");
+    if(!categoryId){ showToast("Créez d'abord une catégorie de ce type."); return; }
+    var accountId = fd.get("accountId") || state.accounts[0].id;
+    var day = parseInt(fd.get("day"),10);
+    if(!day || day<1 || day>31) day = 1;
+    var note = (fd.get("note")||"").toString().slice(0,80);
+    var now = new Date();
+    if(!state.recurring) state.recurring = [];
+    state.recurring.push({
+      id: "rec_"+uid(), type: view.recurringType, amount: amount, categoryId: categoryId,
+      accountId: accountId, day: day, note: note, active: true,
+      createdMonth: monthKey(now.getFullYear(), now.getMonth()), lastGeneratedMonth: null
+    });
+    runRecurringEngine();
+    saveState(); render(); showToast("Récurrence ajoutée.");
   }
 
   function onCatSubmit(e){
@@ -1067,7 +1341,14 @@
 
       monthList.forEach(function(t){
         ensureRoom(7);
-        var c = catById(t.categoryId);
+        var catLabel;
+        if(t.isTransfer){
+          var other = accountById(t.transferAccountId);
+          catLabel = (t.type==="expense" ? "-> " : "<- ") + (other?other.name:"compte supprimé");
+        } else {
+          var c = catById(t.categoryId);
+          catLabel = c ? c.name : "—";
+        }
         doc.setFont("courier","normal"); doc.setFontSize(9); doc.setTextColor(50,58,52);
         doc.text(fmtDateShort.format(new Date(t.date+"T00:00:00")), colDate, y);
         if(showAccountCol){
@@ -1076,9 +1357,9 @@
           doc.text((a?a.name:"—").slice(0,16), colAcc, y);
         }
         doc.setFont("helvetica","normal"); doc.setTextColor(50,58,52);
-        doc.text((c?c.name:"—").slice(0,showAccountCol?18:26), colCat, y);
+        doc.text(pdfSafe(catLabel).slice(0,showAccountCol?18:26), colCat, y);
         doc.setTextColor(139,148,137);
-        doc.text((t.note||"").slice(0,showAccountCol?22:32), colNote, y);
+        doc.text((t.note||(t.isTransfer?"Virement":"")).slice(0,showAccountCol?22:32), colNote, y);
         var col = t.type==="income" ? [31,102,80] : [168,52,43];
         doc.setFont("courier","bold"); doc.setTextColor(col[0],col[1],col[2]);
         doc.text(signedMoneyPdf(t.amount,t.type), colAmt, y, {align:"right"});
@@ -1120,15 +1401,16 @@
 
   /* ===================== Boot ===================== */
   document.getElementById("app").addEventListener("click", onAppClick);
+  document.getElementById("app").addEventListener("change", onAppChange);
 
   if(window.claude && typeof window.claude.use === "function"){
     window.claude.use("downloads").then(function(ns){ window.__glDownloads = ns; }).catch(function(){});
   }
 
+  runRecurringEngine();
   render();
 })();
 </script>
-
 
 <script>
   if ("serviceWorker" in navigator) {
