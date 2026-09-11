@@ -3,7 +3,7 @@
 // first visit, and opportunistically caches everything else it fetches
 // (Google Fonts, the jsPDF library) so those keep working offline too.
 
-const CACHE_NAME = "grand-livre-v12";
+const CACHE_NAME = "grand-livre-v13";
 
 const APP_SHELL = [
   "./",
@@ -56,15 +56,26 @@ self.addEventListener("fetch", (event) => {
           if (response && response.status === 200) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            return response;
           }
+          // fetch() only REJECTS on a true network failure (offline, DNS,
+          // connection refused). A dead link or an outage where the server
+          // still answers — e.g. GitHub Pages returning its own branded 404
+          // page, which happens for real during deploys or brief outages —
+          // resolves normally here with a non-200 status, so it would never
+          // reach the .catch() below. Treat that case exactly like a network
+          // failure: never hand GitHub's error page to the browser when a
+          // good cached copy exists to fall back to instead.
+          if (cached) return cached;
+          if (isNavigation) return caches.match("./index.html").then((shell) => shell || response);
           return response;
         })
         .catch(() => {
-          // Offline, or GitHub Pages unreachable: an exact cache hit for
-          // this request wins if we have one, but for a page navigation
+          // Offline, or GitHub Pages truly unreachable: an exact cache hit
+          // for this request wins if we have one, but for a page navigation
           // (e.g. the pull-to-refresh gesture) that misses, fall back to
           // the cached app shell itself — otherwise the browser is left to
-          // show its own or GitHub's error page instead of the app.
+          // show its own error page instead of the app.
           if (cached) return cached;
           if (isNavigation) return caches.match("./index.html").then((shell) => shell || Response.error());
           return Response.error();
