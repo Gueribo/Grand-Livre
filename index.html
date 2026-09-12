@@ -86,11 +86,19 @@
 
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; }
+  html{
+    /* Blocks the browser's native "pull to refresh" gesture on mobile: with
+       it, a swipe-down-at-the-top reload could bypass the app's own manual
+       update flow. Updates now only ever happen via the "Mettre à jour"
+       button. */
+    overscroll-behavior-y: contain;
+  }
   body{
     background:var(--paper);
     color:var(--ink);
     font-family:"Public Sans", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y: contain;
   }
   h1,h2,h3{ font-family:"Spectral", Georgia, serif; font-weight:600; letter-spacing:.01em; text-wrap:balance; margin:0; }
   .mono{ font-family:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; font-variant-numeric: tabular-nums; }
@@ -362,6 +370,7 @@
 
   footer.note{ text-align:center; margin-top:16px; font-size:11.5px; color:var(--ink-3); }
 </style>
+
 </head>
 <body>
 <div id="app"></div>
@@ -1672,13 +1681,25 @@
         reg.addEventListener("updatefound", function(){
           var installing = reg.installing;
           if(!installing) return;
-          installing.addEventListener("statechange", function(){
-            if(installing.state==="activated" && hadController){
+          function noteIfInstalled(){
+            // sw.js no longer calls skipWaiting() on its own — a freshly
+            // installed worker parks itself at "installed" (waiting) and
+            // stays completely inert there. Nothing about the running app
+            // changes until the person taps "Mettre à jour": that's the
+            // only thing that lets it take over (see applyUpdate below).
+            if(installing.state==="installed" && hadController){
               swChecking = false;
               swUpdateReady = true;
               render();
             }
-          });
+          }
+          // Small local resources can finish installing before this handler
+          // even gets attached, so the "statechange" event that carries the
+          // "installed" transition can already be long gone by the time we
+          // start listening — check the current state right away too, not
+          // only on the next change.
+          installing.addEventListener("statechange", noteIfInstalled);
+          noteIfInstalled();
         });
       }).catch(function(){});
     });
@@ -1703,7 +1724,14 @@
   }
 
   function applyUpdate(){
-    window.location.reload();
+    if(!swReg || !swReg.waiting){ window.location.reload(); return; }
+    // Tell the waiting worker to take over now (the only trigger it ever
+    // gets), then reload once it's actually in control so the new files are
+    // the ones that render.
+    navigator.serviceWorker.addEventListener("controllerchange", function(){
+      window.location.reload();
+    }, { once:true });
+    swReg.waiting.postMessage({ type:"SKIP_WAITING" });
   }
 
   /* ===================== Boot ===================== */

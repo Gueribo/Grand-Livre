@@ -2,8 +2,14 @@
 // Caches the app shell so the app opens and works fully offline after the
 // first visit, and opportunistically caches everything else it fetches
 // (Google Fonts, the jsPDF library) so those keep working offline too.
+//
+// Updates are manual only: a newly installed worker parks itself in the
+// "waiting" state and does nothing else until the app's own "Mettre à jour"
+// button tells it (via postMessage) to skip waiting and take over. Nothing
+// here ever activates a new version, refreshes cached content, or triggers
+// a reload on its own.
 
-const CACHE_NAME = "grand-livre-v13";
+const CACHE_NAME = "grand-livre-v14";
 
 const APP_SHELL = [
   "./",
@@ -29,7 +35,9 @@ self.addEventListener("install", (event) => {
             .catch(() => {})
         )
       );
-    }).then(() => self.skipWaiting())
+    })
+    // No self.skipWaiting() here on purpose: the new worker installs and
+    // then waits, inert, until the page explicitly asks it to take over.
   );
 });
 
@@ -43,15 +51,26 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Stale-while-revalidate: answer instantly from cache when possible, and
-// refresh the cache in the background whenever the network is reachable.
+// The only way a waiting worker is ever told to activate: the app's
+// "Mettre à jour" button, never anything automatic.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// Cache-first, and nothing refreshes silently in the background: once a
+// file is cached it is served as-is, request after request, until the
+// person explicitly updates the app. Only a resource that isn't cached yet
+// (a font, the PDF library, the first time they're used) goes to the
+// network — and if that fails, a page navigation falls back to the cached
+// app shell rather than showing a browser or GitHub error page.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const isNavigation = event.request.mode === "navigate";
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
+      if (cached) return cached;
+      return fetch(event.request)
         .then((response) => {
           if (response && response.status === 200) {
             const copy = response.clone();
@@ -59,28 +78,19 @@ self.addEventListener("fetch", (event) => {
             return response;
           }
           // fetch() only REJECTS on a true network failure (offline, DNS,
-          // connection refused). A dead link or an outage where the server
-          // still answers — e.g. GitHub Pages returning its own branded 404
-          // page, which happens for real during deploys or brief outages —
-          // resolves normally here with a non-200 status, so it would never
-          // reach the .catch() below. Treat that case exactly like a network
-          // failure: never hand GitHub's error page to the browser when a
-          // good cached copy exists to fall back to instead.
-          if (cached) return cached;
+          // connection refused). A server that still answers — e.g. GitHub
+          // Pages returning its own branded 404 during a deploy or a brief
+          // outage — resolves normally here with a non-200 status, so it
+          // never reaches the .catch() below. Treat it the same as a
+          // network failure for a page navigation: never hand that error
+          // page to the browser.
           if (isNavigation) return caches.match("./index.html").then((shell) => shell || response);
           return response;
         })
         .catch(() => {
-          // Offline, or GitHub Pages truly unreachable: an exact cache hit
-          // for this request wins if we have one, but for a page navigation
-          // (e.g. the pull-to-refresh gesture) that misses, fall back to
-          // the cached app shell itself — otherwise the browser is left to
-          // show its own error page instead of the app.
-          if (cached) return cached;
           if (isNavigation) return caches.match("./index.html").then((shell) => shell || Response.error());
           return Response.error();
         });
-      return cached || network;
     })
   );
 });
