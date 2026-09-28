@@ -282,6 +282,19 @@
     .row-actions{ opacity:1; }
   }
 
+  .future-badge{
+    display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
+    font-size:10px; letter-spacing:.03em; text-transform:uppercase; font-weight:600;
+    background:var(--line); color:var(--ink-2); vertical-align:middle;
+  }
+  /* A transaction dated after today hasn't really happened yet — dim it in
+     the register so it reads as "planned" rather than money already moved,
+     without hiding it (it's still useful to see it coming). */
+  .register tbody tr.future-row td{ color:var(--ink-3); }
+  .register tbody tr.future-row .cat-dot{ opacity:.55; }
+  .register tbody tr.future-row .amount.income{ color:var(--ink-3); }
+  .register tbody tr.future-row .amount.expense{ color:var(--ink-3); }
+
   .empty-state{ padding:40px 20px; text-align:center; color:var(--ink-3); }
   .empty-state .glyph{ font-size:26px; margin-bottom:8px; opacity:.7; }
   .empty-state p{ margin:0; font-size:13.5px; max-width:320px; margin-inline:auto; }
@@ -544,9 +557,16 @@
   }
   // accountId omitted (or "all") sums every account — the household total.
   function totalBalance(accountId){
+    // The "real" balance: only what has actually happened. A transaction
+    // dated after today (a salary pre-entered ahead of time, a recurring
+    // rule's next occurrence, etc.) isn't money that's really there yet, so
+    // it stays out of this total no matter which month is being browsed —
+    // it only counts in once its date arrives.
+    var today = todayISO();
     var bal = 0;
     state.transactions.forEach(function(t){
       if(accountId && accountId!=="all" && t.accountId!==accountId) return;
+      if(t.date > today) return;
       bal += (t.type==="income" ? t.amount : -t.amount);
     });
     return bal;
@@ -821,9 +841,10 @@
         ccolor = c ? colorVar(c.color) : colorVar("--ink-3");
       }
       var a = accountById(t.accountId);
+      var isFuture = t.date > todayISO();
       return (
-      '<tr data-id="'+t.id+'">' +
-        '<td class="mono">'+fmtDateShort.format(new Date(t.date+"T00:00:00"))+'</td>' +
+      '<tr data-id="'+t.id+'"'+(isFuture?' class="future-row"':'')+'>' +
+        '<td class="mono">'+fmtDateShort.format(new Date(t.date+"T00:00:00"))+(isFuture?' <span class="future-badge">Prévu</span>':'')+'</td>' +
         (showAccount ? '<td><span class="acc-pill">'+(a?kindIcon(a.kind):"📁")+' '+escapeHtml(a?a.name:"Compte supprimé")+'</span></td>' : '') +
         '<td><span class="cat-tag"><span class="cat-dot" style="background:'+ccolor+'"></span>'+escapeHtml(cname)+'</span></td>' +
         '<td class="note-cell">'+(t.note?escapeHtml(t.note):(isTransfer?'Virement':'—'))+'</td>' +

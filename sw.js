@@ -9,7 +9,7 @@
 // here ever activates a new version, refreshes cached content, or triggers
 // a reload on its own.
 
-const CACHE_NAME = "grand-livre-v15";
+const CACHE_NAME = "grand-livre-v16";
 
 const APP_SHELL = [
   "./",
